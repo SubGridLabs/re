@@ -56,17 +56,31 @@ jobs:
         echo "Searching for baseline shared libraries..."
         find build -name "*libre*" -type f | head -10
 
-        BASELINE_LIB=$(find build -name "libre.so*" -type f | grep -v "\.a$" | sort | tail -1)
+        # Find baseline shared library (handle both Linux .so and macOS .dylib)
+        BASELINE_LIB=$(find build \( -name "libre.so*" -o -name "libre.*.dylib" \) \
+          -type f | grep -v "\.a$" | sort | tail -1)
+
+        if [ -z "$BASELINE_LIB" ]; then
+          echo "No versioned library found, searching for base library..."
+          BASELINE_LIB=$(find build \( -name "libre.so" -o -name "libre.dylib" \) \
+            -type f | head -1)
+        fi
 
         if [ -z "$BASELINE_LIB" ]; then
           echo "No shared library found, searching more broadly..."
-          BASELINE_LIB=$(find build -name "*.so*" -type f | head -1)
+          BASELINE_LIB=$(find build \( -name "*.so*" -o -name "*.dylib*" \) \
+            -type f | grep -v "\.a$" | head -1)
         fi
 
         echo "Found baseline library: $BASELINE_LIB"
 
         if [ -n "$BASELINE_LIB" ] && [ -f "$BASELINE_LIB" ]; then
-          cp "$BASELINE_LIB" ../baseline-libre.so
+          # Copy with appropriate extension based on platform
+          if [[ "$BASELINE_LIB" == *.dylib* ]]; then
+            cp "$BASELINE_LIB" ../baseline-libre.dylib
+          else
+            cp "$BASELINE_LIB" ../baseline-libre.so
+          fi
         else
           echo "ERROR: Could not find baseline shared library"
           exit 1
@@ -82,19 +96,33 @@ jobs:
         echo "Searching for Conan packaged libraries..."
         find ~/.conan2/p -path "*/libre/4.0.0/*" -name "*libre*" -type f | head -10
 
-        # Find the main shared library (look for .so files, prefer versioned)
-        CURRENT_LIB=$(find ~/.conan2/p -path "*/libre/4.0.0/*" -name "libre.so*" \
+        # Find the main shared library (handle both Linux .so and macOS .dylib)
+        # Look for versioned libraries first (libre.so.36.* or libre.36.*.dylib)
+        CURRENT_LIB=$(find ~/.conan2/p -path "*/libre/4.0.0/*" \
+          \( -name "libre.so.*" -o -name "libre.*.dylib" \) \
           -type f | grep -v "\.a$" | sort | tail -1)
 
         if [ -z "$CURRENT_LIB" ]; then
+          echo "No versioned library found, searching for base library..."
+          CURRENT_LIB=$(find ~/.conan2/p -path "*/libre/4.0.0/*" \
+            \( -name "libre.so" -o -name "libre.dylib" \) -type f | head -1)
+        fi
+
+        if [ -z "$CURRENT_LIB" ]; then
           echo "No shared library found, searching more broadly..."
-          CURRENT_LIB=$(find ~/.conan2/p -path "*/libre/4.0.0/*" -name "*.so*" -type f | head -1)
+          CURRENT_LIB=$(find ~/.conan2/p -path "*/libre/4.0.0/*" \
+            \( -name "*.so*" -o -name "*.dylib*" \) -type f | grep -v "\.a$" | head -1)
         fi
 
         echo "Found current library: $CURRENT_LIB"
 
         if [ -n "$CURRENT_LIB" ] && [ -f "$CURRENT_LIB" ]; then
-          cp "$CURRENT_LIB" ../current-libre.so
+          # Copy with appropriate extension based on platform
+          if [[ "$CURRENT_LIB" == *.dylib* ]]; then
+            cp "$CURRENT_LIB" ../current-libre.dylib
+          else
+            cp "$CURRENT_LIB" ../current-libre.so
+          fi
         else
           echo "ERROR: Could not find current shared library"
           exit 1
@@ -103,12 +131,20 @@ jobs:
     - name: Verify libraries
       run: |
         echo "Verifying extracted libraries:"
-        ls -la *.so
-        file *.so
+        ls -la baseline-libre.* current-libre.* || true
+        file baseline-libre.* current-libre.* || true
         echo ""
         echo "Library details:"
-        ldd baseline-libre.so | head -5 || true
-        ldd current-libre.so | head -5 || true
+        if [ -f baseline-libre.so ]; then
+          ldd baseline-libre.so | head -5 || true
+        elif [ -f baseline-libre.dylib ]; then
+          otool -L baseline-libre.dylib | head -5 || true
+        fi
+        if [ -f current-libre.so ]; then
+          ldd current-libre.so | head -5 || true
+        elif [ -f current-libre.dylib ]; then
+          otool -L current-libre.dylib | head -5 || true
+        fi
 
     - name: ABI compatibility check
       id: abidiff
@@ -118,13 +154,35 @@ jobs:
         echo "Current:  libre v4.0.0 (built with Conan from fork)"
         echo ""
 
-        # Run abidiff and capture output
-        if abidiff baseline-libre.so current-libre.so; then
-          echo "✅ ABI is compatible between versions"
-          echo "abi_compatible=true" >> $GITHUB_OUTPUT
+        # Run abidiff and capture output (handle both .so and .dylib)
+        BASELINE_FILE=""
+        CURRENT_FILE=""
+        
+        if [ -f baseline-libre.so ]; then
+          BASELINE_FILE="baseline-libre.so"
+        elif [ -f baseline-libre.dylib ]; then
+          BASELINE_FILE="baseline-libre.dylib"
+        fi
+        
+        if [ -f current-libre.so ]; then
+          CURRENT_FILE="current-libre.so"
+        elif [ -f current-libre.dylib ]; then
+          CURRENT_FILE="current-libre.dylib"
+        fi
+        
+        if [ -n "$BASELINE_FILE" ] && [ -n "$CURRENT_FILE" ]; then
+          echo "Comparing: $BASELINE_FILE vs $CURRENT_FILE"
+          if abidiff "$BASELINE_FILE" "$CURRENT_FILE"; then
+            echo "✅ ABI is compatible between versions"
+            echo "abi_compatible=true" >> $GITHUB_OUTPUT
+          else
+            echo "⚠️ ABI changes detected"
+            echo "abi_compatible=false" >> $GITHUB_OUTPUT
+          fi
         else
-          echo "⚠️ ABI changes detected"
+          echo "❌ Could not find both library files for comparison"
           echo "abi_compatible=false" >> $GITHUB_OUTPUT
+          exit 1
         fi
       continue-on-error: true
 
