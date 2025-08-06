@@ -3,7 +3,7 @@ name: Publish Libre Conan Package
 
 on:
   release:
-    types: [published]
+    types: ["published"]
   workflow_dispatch:
     inputs:
       version:
@@ -16,9 +16,9 @@ on:
         default: 'conancenter'
         type: choice
         options:
-          - conancenter
-          - artifactory
-          - custom
+          - "conancenter"
+          - "artifactory"
+          - "custom"
 
 env:
   CONAN_NON_INTERACTIVE: 1
@@ -45,20 +45,20 @@ jobs:
     name: "Build & Upload ${{ matrix.profile }}"
 
     steps:
-    - name: Checkout
+      - name: Checkout
       uses: actions/checkout@v4
 
-    - name: Setup Python
+      - name: Setup Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.11'
 
-    - name: Install Conan
+      - name: Install Conan
       run: |
         python -m pip install --upgrade pip
         pip install "conan>=2.0.0"
 
-    - name: Configure Conan (Unix)
+      - name: Configure Conan (Unix)
       if: runner.os != 'Windows'
       run: |
         conan profile detect --force
@@ -89,7 +89,7 @@ jobs:
         EOF
         fi
 
-    - name: Configure Conan (Windows)
+      - name: Configure Conan (Windows)
       if: runner.os == 'Windows'
       run: |
         conan profile detect --force
@@ -102,7 +102,7 @@ jobs:
         echo "compiler.runtime=dynamic" >> ~/.conan2/profiles/release
         echo "build_type=Release" >> ~/.conan2/profiles/release
 
-    - name: Install build tools (Linux)
+      - name: Install build tools (Linux)
       if: matrix.profile == 'linux-x64'
       run: |
         sudo apt-get update
@@ -111,12 +111,12 @@ jobs:
           cmake \
           pkg-config
 
-    - name: Install build tools (macOS)
+      - name: Install build tools (macOS)
       if: startsWith(matrix.profile, 'macos-')
       run: |
         brew install cmake pkg-config
 
-    - name: Setup Conan remote
+      - name: Setup Conan remote
       run: |
         # Configure remote based on input
         if [[ "${{ inputs.remote }}" == "conancenter" ]]; then
@@ -124,10 +124,11 @@ jobs:
         elif [[ "${{ inputs.remote }}" == "artifactory" ]]; then
           # Configure your artifactory remote here
           echo "Setting up Artifactory remote..."
-          # conan remote add artifactory https://your-artifactory-url/artifactory/api/conan/conan
+          # conan remote add artifactory \
+          # https://your-artifactory-url/artifactory/api/conan/conan
         fi
 
-    - name: Create and upload packages
+      - name: Create and upload packages
       run: |
         VERSION="${{ inputs.version || github.ref_name }}"
 
@@ -154,7 +155,7 @@ jobs:
           -o libre/*:shared=True \
           --build=missing
 
-    - name: Upload to remote
+      - name: Upload to remote
       if: inputs.remote != 'custom'
       env:
         CONAN_LOGIN_USERNAME: ${{ secrets.CONAN_LOGIN_USERNAME }}
@@ -173,7 +174,7 @@ jobs:
         echo "Uploading libre/${VERSION} packages to $REMOTE..."
         conan upload libre/${VERSION} --all -r $REMOTE
 
-    - name: Package verification
+      - name: Package verification
       run: |
         VERSION="${{ inputs.version || github.ref_name }}"
         echo "=== Package Verification ==="
@@ -199,7 +200,7 @@ jobs:
     name: "Publish Summary"
 
     steps:
-    - name: Summary
+      - name: Summary
       run: |
         VERSION="${{ inputs.version || github.ref_name }}"
         REMOTE="${{ inputs.remote }}"
@@ -209,12 +210,14 @@ jobs:
         echo "### Package Details" >> $GITHUB_STEP_SUMMARY
         echo "- **Version**: \`libre/${VERSION}\`" >> $GITHUB_STEP_SUMMARY
         echo "- **Remote**: \`${REMOTE}\`" >> $GITHUB_STEP_SUMMARY
-        echo "- **Platforms**: Linux, macOS (arm64 & x86_64), Windows" >> $GITHUB_STEP_SUMMARY
+        echo "- **Platforms**: Linux, macOS (arm64 & x86_64), Windows" \
+          >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### Usage" >> $GITHUB_STEP_SUMMARY
         echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
         echo "# Install the package" >> $GITHUB_STEP_SUMMARY
-        echo "conan install libre/${VERSION}@ --build=missing" >> $GITHUB_STEP_SUMMARY
+        echo "conan install libre/${VERSION}@ --build=missing" \
+          >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "# Or add to conanfile.txt" >> $GITHUB_STEP_SUMMARY
         echo "[requires]" >> $GITHUB_STEP_SUMMARY
@@ -222,7 +225,10 @@ jobs:
         echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### Configurations Available" >> $GITHUB_STEP_SUMMARY
-        echo "- 🔒 **OpenSSL** (default) or **MbedTLS**" >> $GITHUB_STEP_SUMMARY
-        echo "- 📚 **Static** (default) or **Shared** libraries" >> $GITHUB_STEP_SUMMARY
-        echo "- 📱 **Protocol support**: SIP, BFCP, PCP, RTMP" >> $GITHUB_STEP_SUMMARY
+        echo "- 🔒 **OpenSSL** (default) or **MbedTLS**" \
+          >> $GITHUB_STEP_SUMMARY
+        echo "- 📚 **Static** (default) or **Shared** libraries" \
+          >> $GITHUB_STEP_SUMMARY
+        echo "- 📱 **Protocol support**: SIP, BFCP, PCP, RTMP" \
+          >> $GITHUB_STEP_SUMMARY
         echo "- 📦 **Compression**: ZLIB support" >> $GITHUB_STEP_SUMMARY

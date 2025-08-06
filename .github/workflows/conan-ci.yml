@@ -3,15 +3,15 @@ name: Libre Conan CI
 
 on:
   push:
-    branches: [main]
+    branches: ["main"]
   pull_request:
-    branches: [main]
+    branches: ["main"]
   workflow_dispatch:
     inputs:
       full_matrix:
         description: 'Run full platform matrix'
         required: false
-        default: 'false'
+        default: false
         type: boolean
 
 env:
@@ -140,20 +140,31 @@ jobs:
         conan create . --profile:build=ci --profile:host=ci --build=missing
 
     - name: Test MbedTLS configuration
-      if: matrix.profile != 'windows-x64'  # MbedTLS might not be available on Windows runners
+      # MbedTLS might not be available on Windows runners
+      if: matrix.profile != 'windows-x64'
       run: |
         echo "Testing with MbedTLS instead of OpenSSL..."
-        conan create . --profile:build=ci --profile:host=ci -o libre/*:with_mbedtls=True -o libre/*:with_openssl=False --build=missing
+        conan create . --profile:build=ci --profile:host=ci \
+          -o libre/*:with_mbedtls=True \
+          -o libre/*:with_openssl=False \
+          --build=missing
 
     - name: Test minimal configuration
       run: |
         echo "Testing minimal configuration..."
-        conan create . --profile:build=ci --profile:host=ci -o libre/*:with_bfcp=False -o libre/*:with_pcp=False -o libre/*:with_rtmp=False -o libre/*:with_zlib=False --build=missing
+        conan create . --profile:build=ci --profile:host=ci \
+          -o libre/*:with_bfcp=False \
+          -o libre/*:with_pcp=False \
+          -o libre/*:with_rtmp=False \
+          -o libre/*:with_zlib=False \
+          --build=missing
 
     - name: Test shared library
       run: |
         echo "Testing shared library build..."
-        conan create . --profile:build=ci --profile:host=ci -o libre/*:shared=True --build=missing
+        conan create . --profile:build=ci --profile:host=ci \
+          -o libre/*:shared=True \
+          --build=missing
 
     - name: Test basic functionality
       run: |
@@ -289,7 +300,9 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### Features Tested" >> $GITHUB_STEP_SUMMARY
         echo "- 🔒 SSL/TLS (OpenSSL & MbedTLS)" >> $GITHUB_STEP_SUMMARY
-        echo "- 📱 Protocol Support (SIP, BFCP, PCP, RTMP)" >> $GITHUB_STEP_SUMMARY
+        echo "- 📱 Protocol Support (SIP, BFCP, PCP, RTMP)" \
+          >> $GITHUB_STEP_SUMMARY
         echo "- 📦 Compression (ZLIB)" >> $GITHUB_STEP_SUMMARY
         echo "- 🔧 Build Types (Static & Shared)" >> $GITHUB_STEP_SUMMARY
-        echo "- 🎯 Platform Features (Unix sockets, etc.)" >> $GITHUB_STEP_SUMMARY
+        echo "- 🎯 Platform Features (Unix sockets, etc.)" \
+          >> $GITHUB_STEP_SUMMARY
