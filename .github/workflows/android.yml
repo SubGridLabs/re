@@ -110,12 +110,18 @@ jobs:
           find $ANDROID_NDK_LATEST_HOME -name "libc++_shared.so" | head -5
           echo "Architecture: ${{ env.abi }}"
           
-          # Use the correct path for x86 architecture (i686-linux-android)
-          LIBCPP_PATH="$ANDROID_NDK_LATEST_HOME/${{ env.toolchain }}/sysroot/usr/lib/i686-linux-android/libc++_shared.so"
-          echo "Trying path: $LIBCPP_PATH"
+          # Find libc++_shared.so dynamically for x86 architecture
+          LIBCPP_PATH=$(find $ANDROID_NDK_LATEST_HOME -path "*/i686-linux-android*/libc++_shared.so" | head -1)
+          if [ -z "$LIBCPP_PATH" ]; then
+            LIBCPP_PATH=$(find $ANDROID_NDK_LATEST_HOME -path "*/x86*/libc++_shared.so" | head -1)
+          fi
+          if [ -z "$LIBCPP_PATH" ]; then
+            LIBCPP_PATH=$(find $ANDROID_NDK_LATEST_HOME -name "libc++_shared.so" | head -1)
+          fi
+          
+          echo "Found libc++ path: $LIBCPP_PATH"
           
           # Test if the file exists and push it
-          test -f "$LIBCPP_PATH" && echo "Found libc++_shared.so at: $LIBCPP_PATH" || echo "File not found at expected path"
-          test -f "$LIBCPP_PATH" && adb push "$LIBCPP_PATH" /data/local/tmp/libc++_shared.so || echo "Skipping libc++ push - file not found"
+          test -f "$LIBCPP_PATH" && echo "Found libc++_shared.so at: $LIBCPP_PATH" && adb push "$LIBCPP_PATH" /data/local/tmp/libc++_shared.so || echo "Skipping libc++ push - file not found"
           echo "=== Running tests ==="
           adb shell HOME=/data/local/tmp LD_LIBRARY_PATH=/data/local/tmp /data/local/tmp/retest -r -v -d /data/local/tmp/retest-data
