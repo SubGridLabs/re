@@ -94,24 +94,30 @@ jobs:
 
         # Extract shared library from Conan package
         echo "Searching for Conan packaged libraries..."
-        find ~/.conan2/p -path "*/libre/4.0.0/*" -name "*libre*" -type f | head -10
+        find ~/.conan2/p -name "*libre*" -type f | head -10
 
         # Find the main shared library (handle both Linux .so and macOS .dylib)
         # Look for versioned libraries first (libre.so.36.* or libre.36.*.dylib)
-        CURRENT_LIB=$(find ~/.conan2/p -path "*/libre/4.0.0/*" \
-          \( -name "libre.so.*" -o -name "libre.*.dylib" \) \
-          -type f | grep -v "\.a$" | sort | tail -1)
-
+        echo "Step 1: Looking for versioned libraries..."
+        CURRENT_LIB=$(find ~/.conan2/p -name "libre.so.*" -type f | head -1)
         if [ -z "$CURRENT_LIB" ]; then
-          echo "No versioned library found, searching for base library..."
-          CURRENT_LIB=$(find ~/.conan2/p -path "*/libre/4.0.0/*" \
-            \( -name "libre.so" -o -name "libre.dylib" \) -type f | head -1)
+          CURRENT_LIB=$(find ~/.conan2/p -name "libre.*.dylib" -type f | head -1)
         fi
 
         if [ -z "$CURRENT_LIB" ]; then
-          echo "No shared library found, searching more broadly..."
-          CURRENT_LIB=$(find ~/.conan2/p -path "*/libre/4.0.0/*" \
-            \( -name "*.so*" -o -name "*.dylib*" \) -type f | grep -v "\.a$" | head -1)
+          echo "Step 2: Looking for base libraries..."
+          CURRENT_LIB=$(find ~/.conan2/p -name "libre.so" -type f | head -1)
+          if [ -z "$CURRENT_LIB" ]; then
+            CURRENT_LIB=$(find ~/.conan2/p -name "libre.dylib" -type f | head -1)
+          fi
+        fi
+
+        if [ -z "$CURRENT_LIB" ]; then
+          echo "Step 3: Broad search for any libre library..."
+          CURRENT_LIB=$(find ~/.conan2/p -name "*libre*.so*" -type f | grep -v "\.a$" | head -1)
+          if [ -z "$CURRENT_LIB" ]; then
+            CURRENT_LIB=$(find ~/.conan2/p -name "*libre*.dylib*" -type f | head -1)
+          fi
         fi
 
         echo "Found current library: $CURRENT_LIB"
