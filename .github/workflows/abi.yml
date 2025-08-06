@@ -42,7 +42,7 @@ jobs:
 
     - name: Setup Conan (for current version only)
       run: |
-        conan remote add conancenter https://center.conan.io --force
+        conan remote add conancenter https://center2.conan.io --force
         conan profile detect --force
 
     - name: Build baseline version (v3.24.0) with CMake
@@ -53,9 +53,24 @@ jobs:
         cmake --build build
 
         # Find the generated shared library
-        BASELINE_LIB=$(find build -name "*.so*" | grep -v "\.a$" | head -1)
+        echo "Searching for baseline shared libraries..."
+        find build -name "*libre*" -type f | head -10
+
+        BASELINE_LIB=$(find build -name "libre.so*" -type f | grep -v "\.a$" | sort | tail -1)
+
+        if [ -z "$BASELINE_LIB" ]; then
+          echo "No shared library found, searching more broadly..."
+          BASELINE_LIB=$(find build -name "*.so*" -type f | head -1)
+        fi
+
         echo "Found baseline library: $BASELINE_LIB"
-        cp "$BASELINE_LIB" ../baseline-libre.so
+
+        if [ -n "$BASELINE_LIB" ] && [ -f "$BASELINE_LIB" ]; then
+          cp "$BASELINE_LIB" ../baseline-libre.so
+        else
+          echo "ERROR: Could not find baseline shared library"
+          exit 1
+        fi
 
     - name: Build current version (v4.0.0) with Conan
       run: |
@@ -64,9 +79,26 @@ jobs:
         conan create . --build=missing -o libre/*:shared=True
 
         # Extract shared library from Conan package
-        CURRENT_LIB=$(find ~/.conan2/p -path "*/libre/4.0.0/*" -name "*.so*" | grep -v "\.a$" | head -1)
+        echo "Searching for Conan packaged libraries..."
+        find ~/.conan2/p -path "*/libre/4.0.0/*" -name "*libre*" -type f | head -10
+
+        # Find the main shared library (look for .so files, prefer versioned)
+        CURRENT_LIB=$(find ~/.conan2/p -path "*/libre/4.0.0/*" -name "libre.so*" \
+          -type f | grep -v "\.a$" | sort | tail -1)
+
+        if [ -z "$CURRENT_LIB" ]; then
+          echo "No shared library found, searching more broadly..."
+          CURRENT_LIB=$(find ~/.conan2/p -path "*/libre/4.0.0/*" -name "*.so*" -type f | head -1)
+        fi
+
         echo "Found current library: $CURRENT_LIB"
-        cp "$CURRENT_LIB" ../current-libre.so
+
+        if [ -n "$CURRENT_LIB" ] && [ -f "$CURRENT_LIB" ]; then
+          cp "$CURRENT_LIB" ../current-libre.so
+        else
+          echo "ERROR: Could not find current shared library"
+          exit 1
+        fi
 
     - name: Verify libraries
       run: |
