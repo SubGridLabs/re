@@ -11,8 +11,8 @@ on:
 env:
   openssl: 3.2.1
   toolchain: toolchains/llvm/prebuilt/linux-x86_64
-  api: 26
-  abi: x86_64
+  api: 28
+  abi: x86
 
 jobs:
   android:
@@ -44,7 +44,16 @@ jobs:
     - name: build
       # unixsock is not currently supported on Android as only abstract (not pathname) addresses are allowed
       run: |
-        cmake -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_LATEST_HOME/build/cmake/android.toolchain.cmake -DANDROID_ABI="$abi" -DANDROID_PLATFORM=android-$api -DOPENSSL_ROOT_DIR=openssl -DOPENSSL_INCLUDE_DIR=openssl/include -DOPENSSL_CRYPTO_LIBRARY=openssl/libcrypto.a -DOPENSSL_SSL_LIBRARY=openssl/libssl.a -DUSE_UNIXSOCK=OFF .
+        echo "Building for Android ABI: $abi, API: $api"
+        cmake -DCMAKE_TOOLCHAIN_FILE=$ANDROID_NDK_LATEST_HOME/build/cmake/android.toolchain.cmake \
+              -DANDROID_ABI="$abi" \
+              -DANDROID_PLATFORM=android-$api \
+              -DOPENSSL_ROOT_DIR=openssl \
+              -DOPENSSL_INCLUDE_DIR=openssl/include \
+              -DOPENSSL_CRYPTO_LIBRARY=openssl/libcrypto.a \
+              -DOPENSSL_SSL_LIBRARY=openssl/libssl.a \
+              -DUSE_UNIXSOCK=OFF \
+              -DCMAKE_BUILD_TYPE=Release .
         cmake --build . -j 4 -t retest
 
     - name: AVD cache
@@ -58,30 +67,39 @@ jobs:
 
     - name: create AVD and generate snapshot for caching
       if: steps.avd-cache.outputs.cache-hit != 'true'
-      uses: reactivecircus/android-emulator-runner@v2
+      uses: reactivecircus/android-emulator-runner@v2.34.0
       with:
         api-level: ${{ env.api }}
         arch: ${{ env.abi }}
         target: google_apis
         force-avd-creation: false
+        emulator-boot-timeout: 300
         emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-metrics
         disable-animations: false
         script: echo "Generated AVD snapshot for caching."
 
     - name: run
-      uses: reactivecircus/android-emulator-runner@v2
+      uses: reactivecircus/android-emulator-runner@v2.34.0
       with:
         api-level: ${{ env.api }}
         arch: ${{ env.abi }}
         target: google_apis
         force-avd-creation: false
+        emulator-boot-timeout: 300
         emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-metrics
         disable-animations: true
         # Use test data directory as a writeable directory for I/O tests as the emulator file system is not generally writeable
         script: |
+          echo "=== Android emulator status ==="
+          adb devices
+          adb shell getprop ro.build.version.sdk
+          adb shell getprop ro.product.cpu.abi
+          echo "=== Pushing test files ==="
           adb push test/retest /data/local/tmp/retest
           adb shell chmod 775 /data/local/tmp/retest
           adb push test/data /data/local/tmp/retest-data
           adb shell chmod 775 /data/local/tmp/retest-data
+          echo "=== Pushing libc++ ==="
           adb push $ANDROID_NDK_LATEST_HOME/$toolchain/sysroot/usr/lib/$abi-linux-android/libc++_shared.so /data/local/tmp/libc++_shared.so
+          echo "=== Running tests ==="
           adb shell HOME=/data/local/tmp LD_LIBRARY_PATH=/data/local/tmp /data/local/tmp/retest -r -v -d /data/local/tmp/retest-data
