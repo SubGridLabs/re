@@ -7,7 +7,7 @@ import os
 
 class LibreConan(ConanFile):
     name = "libre"
-    version = "3.24.0"
+    version = "4.0.0"
     
     # Package metadata
     description = "Generic library for real-time communications with async IO support"
