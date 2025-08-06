@@ -25,48 +25,96 @@ jobs:
       with:
         path: current
 
-    - name: fix flaky azure mirrors
-      if: ${{ runner.os == 'Linux' }}
-      run: |
-        sudo sed -i 's/azure\./de\./' /etc/apt/sources.list
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
 
-    - name: install dependencies
+    - name: Install dependencies
       run: |
-        sudo apt-get update && sudo apt-get install -y abigail-tools cmake ninja-build libssl-dev zlib1g-dev
+        # Install Python and Conan for current version
+        python -m pip install --upgrade pip
+        pip install "conan>=2.0.0"
+        # Install build tools and ABI analysis tools
+        sudo apt-get update && sudo apt-get install -y \
+          abigail-tools cmake ninja-build \
+          libssl-dev zlib1g-dev build-essential
 
-    - name: build baseline shared library
+    - name: Setup Conan (for current version only)
       run: |
-        cmake -S old -B old/build -DBUILD_SHARED_LIBS=ON -DCMAKE_BUILD_TYPE=Release -GNinja
-        cmake --build old/build --target libre
+        conan remote add conancenter https://center.conan.io --force
+        conan profile detect --force
 
-    - name: build current shared library
+    - name: Build baseline version (v3.24.0) with CMake
       run: |
-        cmake -S current -B current/build -DBUILD_SHARED_LIBS=ON -DCMAKE_BUILD_TYPE=Release -GNinja
-        cmake --build current/build --target libre
+        cd old
+        echo "Building baseline v3.24.0 with traditional CMake..."
+        cmake -B build -DBUILD_SHARED_LIBS=ON -DCMAKE_BUILD_TYPE=Release -GNinja
+        cmake --build build
 
-    - name: find shared libraries
+        # Find the generated shared library
+        BASELINE_LIB=$(find build -name "*.so*" | grep -v "\.a$" | head -1)
+        echo "Found baseline library: $BASELINE_LIB"
+        cp "$BASELINE_LIB" ../baseline-libre.so
+
+    - name: Build current version (v4.0.0) with Conan
       run: |
-        echo "Baseline library:"
-        find old/build -name "*.so*" -type f | head -5
-        echo "Current library:"
-        find current/build -name "*.so*" -type f | head -5
+        cd current
+        echo "Building current v4.0.0 with Conan..."
+        conan create . --build=missing -o libre/*:shared=True
 
-    - name: abidiff compare
+        # Extract shared library from Conan package
+        CURRENT_LIB=$(find ~/.conan2/p -path "*/libre/4.0.0/*" -name "*.so*" | grep -v "\.a$" | head -1)
+        echo "Found current library: $CURRENT_LIB"
+        cp "$CURRENT_LIB" ../current-libre.so
+
+    - name: Verify libraries
+      run: |
+        echo "Verifying extracted libraries:"
+        ls -la *.so
+        file *.so
+        echo ""
+        echo "Library details:"
+        ldd baseline-libre.so | head -5 || true
+        ldd current-libre.so | head -5 || true
+
+    - name: ABI compatibility check
       id: abidiff
       run: |
-        OLD_LIB=$(find old/build -name "libre.so*" -type f | head -1)
-        NEW_LIB=$(find current/build -name "libre.so*" -type f | head -1)
-        echo "Comparing: $OLD_LIB vs $NEW_LIB"
-        abidiff "$OLD_LIB" "$NEW_LIB" || true
+        echo "🔍 Performing ABI compatibility analysis..."
+        echo "Baseline: libre v3.24.0 (built with CMake from upstream)"
+        echo "Current:  libre v4.0.0 (built with Conan from fork)"
+        echo ""
+
+        # Run abidiff and capture output
+        if abidiff baseline-libre.so current-libre.so; then
+          echo "✅ ABI is compatible between versions"
+          echo "abi_compatible=true" >> $GITHUB_OUTPUT
+        else
+          echo "⚠️ ABI changes detected"
+          echo "abi_compatible=false" >> $GITHUB_OUTPUT
+        fi
       continue-on-error: true
 
     - name: ABI compatibility summary
       run: |
-        if [ "${{ steps.abidiff.outcome }}" = "success" ]; then
-          echo "✅ ABI is compatible between v3.24.0 and current version"
-          echo "::notice::ABI compatibility maintained"
+        echo "## 🔍 ABI Compatibility Analysis" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Baseline Version:** libre v3.24.0 (built with CMake from upstream)" >> $GITHUB_STEP_SUMMARY
+        echo "**Current Version:** libre v4.0.0 (built with Conan from fork)" >> $GITHUB_STEP_SUMMARY
+        echo "**Build Methods:** Hybrid approach for maximum compatibility" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+
+        if [ "${{ steps.abidiff.outputs.abi_compatible }}" = "true" ]; then
+          echo "✅ **Result:** ABI compatibility maintained" >> $GITHUB_STEP_SUMMARY
+          echo "::notice::ABI compatibility maintained between v3.24.0 and v4.0.0"
         else
-          echo "⚠️ ABI changes detected between v3.24.0 and current version (4.0.0)"
-          echo "::warning::ABI breaking changes found - this is expected for major version bump (3.x → 4.x)"
-          echo "::notice::For major version releases, ABI breaks are acceptable"
+          echo "⚠️ **Result:** ABI breaking changes detected" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Analysis:** This is expected for major version bumps (3.x → 4.x)" >> $GITHUB_STEP_SUMMARY
+          echo "**Impact:** Applications using libre will need to be recompiled" >> $GITHUB_STEP_SUMMARY
+          echo "**Action Required:** Update version dependencies in downstream projects" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "::warning::ABI breaking changes found - expected for major version bump (3.x → 4.x)"
+          echo "::notice::For major version releases, ABI breaks are acceptable and expected"
         fi
