@@ -146,7 +146,7 @@ class LibreConan(ConanFile):
         self.cpp_info.libs = ["re"]
         
         # Include directories
-        self.cpp_info.includedirs = ["include"]
+        self.cpp_info.includedirs = ["include/re"]
         
         # System libraries
         if self.settings.os in ["Linux", "FreeBSD"]:

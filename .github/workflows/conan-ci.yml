@@ -89,7 +89,7 @@ jobs:
         arch=${{ matrix.arch }}
         compiler=gcc
         compiler.version=11
-        compiler.libcxx=libc++
+        compiler.libcxx=libstdc++11
         build_type=${{ matrix.build_type }}
         EOF
         fi
@@ -136,34 +136,23 @@ jobs:
     - name: Test OpenSSL configuration (default)
       run: |
         echo "Testing with OpenSSL (default configuration)..."
-        conan create . --profile:build=ci --profile:host=ci \
-          --build=missing
+        conan create . --profile:build=ci --profile:host=ci --build=missing
 
     - name: Test MbedTLS configuration
       if: matrix.profile != 'windows-x64'  # MbedTLS might not be available on Windows runners
       run: |
         echo "Testing with MbedTLS instead of OpenSSL..."
-        conan create . --profile:build=ci --profile:host=ci \
-          -o libre/*:with_mbedtls=True \
-          -o libre/*:with_openssl=False \
-          --build=missing
+        conan create . --profile:build=ci --profile:host=ci -o libre/*:with_mbedtls=True -o libre/*:with_openssl=False --build=missing
 
     - name: Test minimal configuration
       run: |
         echo "Testing minimal configuration..."
-        conan create . --profile:build=ci --profile:host=ci \
-          -o libre/*:with_bfcp=False \
-          -o libre/*:with_pcp=False \
-          -o libre/*:with_rtmp=False \
-          -o libre/*:with_zlib=False \
-          --build=missing
+        conan create . --profile:build=ci --profile:host=ci -o libre/*:with_bfcp=False -o libre/*:with_pcp=False -o libre/*:with_rtmp=False -o libre/*:with_zlib=False --build=missing
 
     - name: Test shared library
       run: |
         echo "Testing shared library build..."
-        conan create . --profile:build=ci --profile:host=ci \
-          -o libre/*:shared=True \
-          --build=missing
+        conan create . --profile:build=ci --profile:host=ci -o libre/*:shared=True --build=missing
 
     - name: Test basic functionality
       run: |
@@ -195,7 +184,7 @@ jobs:
 
         cat > test.c << 'EOF'
         #include <stdio.h>
-        #include "re.h"
+        #include <re.h>
 
         int main() {
             printf("libre version: %s\n", RE_VERSION);
