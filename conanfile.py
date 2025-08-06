@@ -95,7 +95,7 @@ class LibreConan(ConanFile):
         if self.options.with_openssl:
             self.requires("openssl/[>=1.1.1]")
         elif self.options.with_mbedtls:
-            self.requires("mbedtls/3.4.0")
+            self.requires("mbedtls/3.6.0")
         
         # Compression
         if self.options.with_zlib:

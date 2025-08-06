@@ -1,10 +1,11 @@
+---
 name: Libre Conan CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
     inputs:
       full_matrix:
@@ -29,18 +30,15 @@ jobs:
             arch: armv8
             build_type: Release
             profile: "macos-arm64"
-            
-          - os: macos-latest  
+          - os: macos-latest
             arch: x86_64
             build_type: Release
             profile: "macos-x64"
-            
           # Windows builds
           - os: windows-latest
             arch: x86_64
             build_type: Release
             profile: "windows-x64"
-            
           # Linux builds
           - os: ubuntu-latest
             arch: x86_64
@@ -49,27 +47,27 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     name: "Build ${{ matrix.profile }}"
-    
+
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-      
+
     - name: Setup Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.11'
-        
+
     - name: Install Conan
       run: |
         python -m pip install --upgrade pip
         pip install "conan>=2.0.0"
-        
+
     - name: Configure Conan (Unix)
       if: runner.os != 'Windows'
       run: |
         conan profile detect --force
         mkdir -p ~/.conan2/profiles
-        
+
         # Create optimized profiles for each platform
         if [[ "${{ matrix.profile }}" == "macos-"* ]]; then
           cat > ~/.conan2/profiles/ci << 'EOF'
@@ -78,7 +76,7 @@ jobs:
         arch=${{ matrix.arch }}
         compiler=apple-clang
         compiler.version=15
-        compiler.libcxx=libstdc++11
+        compiler.libcxx=libc++
         build_type=${{ matrix.build_type }}
         [buildenv]
         CC=clang
@@ -91,16 +89,16 @@ jobs:
         arch=${{ matrix.arch }}
         compiler=gcc
         compiler.version=11
-        compiler.libcxx=libstdc++11
+        compiler.libcxx=libc++
         build_type=${{ matrix.build_type }}
         EOF
         fi
-        
+
     - name: Configure Conan (Windows)
       if: runner.os == 'Windows'
       run: |
         conan profile detect --force
-        mkdir -p ~/.conan2/profiles
+        New-Item -ItemType Directory -Force -Path ~/.conan2/profiles
         echo "[settings]" > ~/.conan2/profiles/ci
         echo "os=Windows" >> ~/.conan2/profiles/ci
         echo "arch=${{ matrix.arch }}" >> ~/.conan2/profiles/ci
@@ -108,7 +106,7 @@ jobs:
         echo "compiler.version=193" >> ~/.conan2/profiles/ci
         echo "compiler.runtime=dynamic" >> ~/.conan2/profiles/ci
         echo "build_type=${{ matrix.build_type }}" >> ~/.conan2/profiles/ci
-        
+
     - name: Install system dependencies (Linux)
       if: matrix.profile == 'linux-x64'
       run: |
@@ -119,13 +117,13 @@ jobs:
           pkg-config \
           libssl-dev \
           zlib1g-dev
-          
+
     - name: Install system dependencies (macOS)
       if: startsWith(matrix.profile, 'macos-')
       run: |
         brew install cmake pkg-config openssl zlib
         echo "OPENSSL_ROOT_DIR=$(brew --prefix openssl)" >> $GITHUB_ENV
-        
+
     - name: Cache Conan packages
       uses: actions/cache@v3
       with:
@@ -134,13 +132,13 @@ jobs:
         restore-keys: |
           conan-libre-${{ matrix.profile }}-
           conan-libre-
-          
+
     - name: Test OpenSSL configuration (default)
       run: |
         echo "Testing with OpenSSL (default configuration)..."
         conan create . --profile:build=ci --profile:host=ci \
           --build=missing
-          
+
     - name: Test MbedTLS configuration
       if: matrix.profile != 'windows-x64'  # MbedTLS might not be available on Windows runners
       run: |
@@ -149,7 +147,7 @@ jobs:
           -o libre/*:with_mbedtls=True \
           -o libre/*:with_openssl=False \
           --build=missing
-          
+
     - name: Test minimal configuration
       run: |
         echo "Testing minimal configuration..."
@@ -159,70 +157,70 @@ jobs:
           -o libre/*:with_rtmp=False \
           -o libre/*:with_zlib=False \
           --build=missing
-          
+
     - name: Test shared library
       run: |
         echo "Testing shared library build..."
         conan create . --profile:build=ci --profile:host=ci \
           -o libre/*:shared=True \
           --build=missing
-          
+
     - name: Test basic functionality
       run: |
         # Create a test consumer to verify the package works
         mkdir test-consumer
         cd test-consumer
-        
+
         cat > conanfile.txt << 'EOF'
         [requires]
         libre/4.0.0
-        
+
         [generators]
         CMakeDeps
         CMakeToolchain
-        
+
         [layout]
         cmake_layout
         EOF
-        
+
         cat > CMakeLists.txt << 'EOF'
         cmake_minimum_required(VERSION 3.18)
         project(test-libre)
-        
+
         find_package(libre REQUIRED)
-        
+
         add_executable(test-libre test.c)
         target_link_libraries(test-libre libre::libre)
         EOF
-        
+
         cat > test.c << 'EOF'
         #include <stdio.h>
         #include "re.h"
-        
+
         int main() {
             printf("libre version: %s\n", RE_VERSION);
             printf("Testing basic functionality...\n");
-            
+
             // Test basic memory functions
             struct pl str;
             pl_set_str(&str, "Hello libre!");
             printf("String test: %.*s\n", (int)str.l, str.p);
-            
+
             return 0;
         }
         EOF
-        
+
         conan install . --profile:build=ci --profile:host=ci --build=missing
         cmake --preset conan-release
         cmake --build --preset conan-release
-        
+
         # Run the test executable
         if [[ "${{ runner.os }}" == "Windows" ]]; then
           ./build/Release/test-libre.exe
         else
           ./build/Release/test-libre
         fi
-        
+
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
@@ -231,7 +229,7 @@ jobs:
           ~/.conan2/p/*/p/lib/libre*
           ~/.conan2/p/*/p/include/re*
         retention-days: 7
-        
+
     - name: Package information
       run: |
         echo "=== Conan Package Info ==="
@@ -241,39 +239,39 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     name: "Quality Checks"
-    
+
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-      
+
     - name: Setup Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.11'
-        
+
     - name: Install tools
       run: |
         pip install conan yamllint
-        
+
     - name: Validate Conan recipe
       run: |
         conan export . --name=libre --version=4.0.0
-        
+
     - name: Check workflow syntax
       run: |
         yamllint .github/workflows/conan-*.yml
-        
+
     - name: Conan recipe linting
       run: |
         # Basic recipe validation
         python -c "
         from conan import ConanFile
         import ast
-        
+
         # Parse conanfile.py to check for basic syntax issues
         with open('conanfile.py', 'r') as f:
             content = f.read()
-            
+
         try:
             ast.parse(content)
             print('✅ conanfile.py syntax is valid')
@@ -288,7 +286,7 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     name: "Build Summary"
-    
+
     steps:
     - name: Summary
       run: |
@@ -296,7 +294,7 @@ jobs:
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### Platform Support" >> $GITHUB_STEP_SUMMARY
         echo "- ✅ macOS (arm64 & x86_64)" >> $GITHUB_STEP_SUMMARY
-        echo "- ✅ Windows (x86_64)" >> $GITHUB_STEP_SUMMARY  
+        echo "- ✅ Windows (x86_64)" >> $GITHUB_STEP_SUMMARY
         echo "- ✅ Linux (x86_64)" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         echo "### Features Tested" >> $GITHUB_STEP_SUMMARY
