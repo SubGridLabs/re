@@ -84,7 +84,7 @@ jobs:
         arch=${{ matrix.arch }}
         compiler=gcc
         compiler.version=11
-        compiler.libcxx=libc++
+        compiler.libcxx=libstdc++11
         build_type=Release
         EOF
         fi
@@ -102,22 +102,19 @@ jobs:
         echo "compiler.runtime=dynamic" >> ~/.conan2/profiles/release
         echo "build_type=Release" >> ~/.conan2/profiles/release
 
-    - name: Install system dependencies (Linux)
+    - name: Install build tools (Linux)
       if: matrix.profile == 'linux-x64'
       run: |
         sudo apt-get update
         sudo apt-get install -y \
           build-essential \
           cmake \
-          pkg-config \
-          libssl-dev \
-          zlib1g-dev
+          pkg-config
 
-    - name: Install system dependencies (macOS)
+    - name: Install build tools (macOS)
       if: startsWith(matrix.profile, 'macos-')
       run: |
-        brew install cmake pkg-config openssl zlib
-        echo "OPENSSL_ROOT_DIR=$(brew --prefix openssl)" >> $GITHUB_ENV
+        brew install cmake pkg-config
 
     - name: Setup Conan remote
       run: |

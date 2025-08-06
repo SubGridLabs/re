@@ -1,1 +1,0 @@
-. "/Users/palmarti/development/re/test-consumer/build/Release/generators/conanrunenv-release-armv8.sh"

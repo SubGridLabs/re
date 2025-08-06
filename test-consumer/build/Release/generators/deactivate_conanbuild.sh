@@ -1,1 +1,0 @@
-. "/Users/palmarti/development/re/test-consumer/build/Release/generators/deactivate_conanbuildenv-release-armv8.sh"
