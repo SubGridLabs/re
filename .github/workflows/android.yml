@@ -108,10 +108,10 @@ jobs:
           echo "=== Finding and pushing libc++ ==="
           echo "Looking for libc++_shared.so in NDK..."
           find $ANDROID_NDK_LATEST_HOME -name "libc++_shared.so" | head -5
-          echo "Architecture: $abi"
+          echo "Architecture: ${{ env.abi }}"
           
           # Use the correct path for x86 architecture (i686-linux-android)
-          LIBCPP_PATH="$ANDROID_NDK_LATEST_HOME/$toolchain/sysroot/usr/lib/i686-linux-android/libc++_shared.so"
+          LIBCPP_PATH="$ANDROID_NDK_LATEST_HOME/${{ env.toolchain }}/sysroot/usr/lib/i686-linux-android/libc++_shared.so"
           echo "Trying path: $LIBCPP_PATH"
           
           # Test if the file exists and push it
