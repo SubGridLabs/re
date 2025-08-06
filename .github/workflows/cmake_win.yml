@@ -61,10 +61,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install OpenSSL
-        if: ${{ matrix.config.openssl }}
-        run: |
-          choco install --no-progress ${{ matrix.config.choco }} openssl
+      # Note: Using system OpenSSL (pre-installed on Windows runners)
+      # No need to install OpenSSL via Chocolatey
 
       - name: Build
         shell: cmd
