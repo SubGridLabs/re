@@ -1,0 +1,11 @@
+extends: relaxed
+
+rules:
+  # Allow long lines in GitHub Actions due to templating
+  line-length:
+    max: 120
+  
+  # Allow truthy values like 'on' which is common in GitHub Actions
+  truthy:
+    allowed-values: ['true', 'false', 'on', 'off', 'yes', 'no']
+    check-keys: false
