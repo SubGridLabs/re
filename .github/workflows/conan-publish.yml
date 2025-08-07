@@ -1,234 +1,160 @@
----
-name: Publish Libre Conan Package
+name: Conan Publish
 
 on:
-  release:
-    types: ["published"]
   workflow_dispatch:
     inputs:
       version:
         description: 'Package version to publish'
-        required: true
-        default: '4.0.0'
+        required: false
+        type: string
       remote:
-        description: 'Conan remote to publish to'
+        description: 'Conan remote'
         required: true
-        default: 'conancenter'
+        default: 'artifactory'
         type: choice
         options:
-          - "conancenter"
-          - "artifactory"
-          - "custom"
-
-env:
-  CONAN_NON_INTERACTIVE: 1
+          - artifactory
+          - conancenter
 
 jobs:
   publish:
-    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          - profile: "linux-x64"
+            os: ubuntu-latest
             arch: x86_64
-            profile: "linux-x64"
-          - os: macos-latest
+          - profile: "macos-arm64"
+            os: macos-latest
             arch: armv8
-            profile: "macos-arm64"
-          - os: macos-latest
+          - profile: "macos-x64"
+            os: macos-latest
             arch: x86_64
-            profile: "macos-x64"
-          - os: windows-latest
+          - profile: "windows-x64"
+            os: windows-latest
             arch: x86_64
-            profile: "windows-x64"
 
-    name: "Build & Upload ${{ matrix.profile }}"
+    runs-on: ${{ matrix.os }}
+    name: "Publish ${{ matrix.profile }}"
 
     steps:
       - name: Checkout
-      uses: actions/checkout@v4
+        uses: actions/checkout@v4
 
       - name: Setup Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
 
       - name: Install Conan
-      run: |
-        python -m pip install --upgrade pip
-        pip install "conan>=2.0.0"
+        run: |
+          python -m pip install --upgrade pip
+          pip install "conan>=2.0.0"
 
       - name: Configure Conan (Unix)
-      if: runner.os != 'Windows'
-      run: |
-        conan profile detect --force
-        mkdir -p ~/.conan2/profiles
+        if: runner.os != 'Windows'
+        run: |
+          conan profile detect --force
+          mkdir -p ~/.conan2/profiles
 
-        if [[ "${{ matrix.profile }}" == "macos-"* ]]; then
-          cat > ~/.conan2/profiles/release << 'EOF'
-        [settings]
-        os=Macos
-        arch=${{ matrix.arch }}
-        compiler=apple-clang
-        compiler.version=15
-        compiler.libcxx=libc++
-        build_type=Release
-        [buildenv]
-        CC=clang
-        CXX=clang++
-        EOF
-        elif [[ "${{ matrix.profile }}" == "linux-"* ]]; then
-          cat > ~/.conan2/profiles/release << 'EOF'
-        [settings]
-        os=Linux
-        arch=${{ matrix.arch }}
-        compiler=gcc
-        compiler.version=11
-        compiler.libcxx=libstdc++11
-        build_type=Release
-        EOF
-        fi
+          if [[ "${{ matrix.profile }}" == "macos-"* ]]; then
+            cat > ~/.conan2/profiles/release << 'EOF'
+          [settings]
+          os=Macos
+          arch=${{ matrix.arch }}
+          compiler=apple-clang
+          compiler.version=15
+          compiler.libcxx=libc++
+          build_type=Release
+          [buildenv]
+          CC=clang
+          CXX=clang++
+          EOF
+          elif [[ "${{ matrix.profile }}" == "linux-"* ]]; then
+            cat > ~/.conan2/profiles/release << 'EOF'
+          [settings]
+          os=Linux
+          arch=${{ matrix.arch }}
+          compiler=gcc
+          compiler.version=11
+          compiler.libcxx=libstdc++11
+          build_type=Release
+          EOF
+          fi
 
       - name: Configure Conan (Windows)
-      if: runner.os == 'Windows'
-      run: |
-        conan profile detect --force
-        New-Item -ItemType Directory -Force -Path ~/.conan2/profiles
-        echo "[settings]" > ~/.conan2/profiles/release
-        echo "os=Windows" >> ~/.conan2/profiles/release
-        echo "arch=${{ matrix.arch }}" >> ~/.conan2/profiles/release
-        echo "compiler=msvc" >> ~/.conan2/profiles/release
-        echo "compiler.version=193" >> ~/.conan2/profiles/release
-        echo "compiler.runtime=dynamic" >> ~/.conan2/profiles/release
-        echo "build_type=Release" >> ~/.conan2/profiles/release
+        if: runner.os == 'Windows'
+        run: |
+          conan profile detect --force
+          New-Item -ItemType Directory -Force -Path ~/.conan2/profiles
+          echo "[settings]" > ~/.conan2/profiles/release
+          echo "os=Windows" >> ~/.conan2/profiles/release
+          echo "arch=${{ matrix.arch }}" >> ~/.conan2/profiles/release
+          echo "compiler=msvc" >> ~/.conan2/profiles/release
+          echo "compiler.version=193" >> ~/.conan2/profiles/release
+          echo "compiler.runtime=dynamic" >> ~/.conan2/profiles/release
+          echo "build_type=Release" >> ~/.conan2/profiles/release
 
       - name: Install build tools (Linux)
-      if: matrix.profile == 'linux-x64'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          build-essential \
-          cmake \
-          pkg-config
+        if: startsWith(matrix.profile, 'linux-')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake pkg-config
 
       - name: Install build tools (macOS)
-      if: startsWith(matrix.profile, 'macos-')
-      run: |
-        brew install cmake pkg-config
+        if: startsWith(matrix.profile, 'macos-')
+        run: |
+          brew install cmake pkg-config
 
-      - name: Setup Conan remote
-      run: |
-        # Configure remote based on input
-        if [[ "${{ inputs.remote }}" == "conancenter" ]]; then
-          conan remote add conancenter https://center.conan.io
-        elif [[ "${{ inputs.remote }}" == "artifactory" ]]; then
-          # Configure your artifactory remote here
-          echo "Setting up Artifactory remote..."
-          # conan remote add artifactory \
-          # https://your-artifactory-url/artifactory/api/conan/conan
-        fi
+      - name: Setup Conan remotes
+        run: |
+          conan remote add artifactory ${{ secrets.CONAN_REMOTE_URL }} --force
+          conan remote add conancenter https://center.conan.io --force
+          
+      - name: Authenticate with Artifactory
+        run: |
+          conan remote login artifactory ${{ secrets.CONAN_USER }} -p ${{ secrets.CONAN_PASSWORD }}
 
       - name: Create and upload packages
-      run: |
-        VERSION="${{ inputs.version || github.ref_name }}"
+        run: |
+          VERSION="${{ inputs.version || github.ref_name }}"
+          
+          # Build dependencies first and upload missing ones
+          echo "Building dependencies and uploading missing packages..."
+          conan install . --profile:build=release --profile:host=release --build=missing
+          
+          # Upload any newly built dependencies to artifactory
+          conan list "*:*" --format=compact | grep -v "libre/" | while read pkg; do
+            if [ ! -z "$pkg" ]; then
+              echo "Uploading dependency: $pkg"
+              conan upload "$pkg" -r artifactory -c || echo "Failed to upload $pkg, continuing..."
+            fi
+          done
 
-        # Build main configuration (OpenSSL)
-        echo "Building main configuration with OpenSSL..."
-        conan create . --name=libre --version=${VERSION} \
-          --profile:build=release --profile:host=release \
-          --build=missing
-
-        # Build alternative configuration (MbedTLS) - if not Windows
-        if [[ "${{ matrix.profile }}" != "windows-x64" ]]; then
-          echo "Building alternative configuration with MbedTLS..."
+          # Build main configuration (OpenSSL)
+          echo "Building main configuration with OpenSSL..."
           conan create . --name=libre --version=${VERSION} \
             --profile:build=release --profile:host=release \
-            -o libre/*:with_mbedtls=True \
-            -o libre/*:with_openssl=False \
             --build=missing
-        fi
+          
+          # Upload the libre package
+          conan upload "libre/${VERSION}@" -r artifactory -c
 
-        # Build shared library version
-        echo "Building shared library configuration..."
-        conan create . --name=libre --version=${VERSION} \
-          --profile:build=release --profile:host=release \
-          -o libre/*:shared=True \
-          --build=missing
+          # Build alternative configuration (MbedTLS) - if not Windows
+          if [[ "${{ matrix.profile }}" != "windows-x64" ]]; then
+            echo "Building alternative configuration with MbedTLS..."
+            conan create . --name=libre --version=${VERSION} \
+              --profile:build=release --profile:host=release \
+              -o libre/*:with_mbedtls=True \
+              -o libre/*:with_openssl=False \
+              --build=missing
+            
+            # Upload MbedTLS variant
+            conan upload "libre/${VERSION}@" -r artifactory -c
+          fi
 
-      - name: Upload to remote
-      if: inputs.remote != 'custom'
-      env:
-        CONAN_LOGIN_USERNAME: ${{ secrets.CONAN_LOGIN_USERNAME }}
-        CONAN_PASSWORD: ${{ secrets.CONAN_PASSWORD }}
-      run: |
-        VERSION="${{ inputs.version || github.ref_name }}"
-        REMOTE="${{ inputs.remote }}"
-
-        # Login to remote if credentials are available
-        if [[ -n "$CONAN_LOGIN_USERNAME" && -n "$CONAN_PASSWORD" ]]; then
-          echo "Logging in to $REMOTE..."
-          conan remote login $REMOTE $CONAN_LOGIN_USERNAME -p $CONAN_PASSWORD
-        fi
-
-        # Upload all packages for this version
-        echo "Uploading libre/${VERSION} packages to $REMOTE..."
-        conan upload libre/${VERSION} --all -r $REMOTE
-
-      - name: Package verification
-      run: |
-        VERSION="${{ inputs.version || github.ref_name }}"
-        echo "=== Package Verification ==="
-        conan list libre/${VERSION}:*
-
-        # Test installation
-        mkdir test-install && cd test-install
-        cat > conanfile.txt << 'EOF'
-        [requires]
-        libre/${{ inputs.version || github.ref_name }}
-        [generators]
-        CMakeDeps
-        EOF
-
-        conan install . --profile:host=release --build=missing
-        echo "✅ Package installation test passed"
-
-  # Summary job
-  summary:
-    needs: publish
-    if: always()
-    runs-on: ubuntu-latest
-    name: "Publish Summary"
-
-    steps:
-      - name: Summary
-      run: |
-        VERSION="${{ inputs.version || github.ref_name }}"
-        REMOTE="${{ inputs.remote }}"
-
-        echo "## 📦 Libre Conan Package Published" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### Package Details" >> $GITHUB_STEP_SUMMARY
-        echo "- **Version**: \`libre/${VERSION}\`" >> $GITHUB_STEP_SUMMARY
-        echo "- **Remote**: \`${REMOTE}\`" >> $GITHUB_STEP_SUMMARY
-        echo "- **Platforms**: Linux, macOS (arm64 & x86_64), Windows" \
-          >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### Usage" >> $GITHUB_STEP_SUMMARY
-        echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
-        echo "# Install the package" >> $GITHUB_STEP_SUMMARY
-        echo "conan install libre/${VERSION}@ --build=missing" \
-          >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "# Or add to conanfile.txt" >> $GITHUB_STEP_SUMMARY
-        echo "[requires]" >> $GITHUB_STEP_SUMMARY
-        echo "libre/${VERSION}" >> $GITHUB_STEP_SUMMARY
-        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### Configurations Available" >> $GITHUB_STEP_SUMMARY
-        echo "- 🔒 **OpenSSL** (default) or **MbedTLS**" \
-          >> $GITHUB_STEP_SUMMARY
-        echo "- 📚 **Static** (default) or **Shared** libraries" \
-          >> $GITHUB_STEP_SUMMARY
-        echo "- 📱 **Protocol support**: SIP, BFCP, PCP, RTMP" \
-          >> $GITHUB_STEP_SUMMARY
-        echo "- 📦 **Compression**: ZLIB support" >> $GITHUB_STEP_SUMMARY
+      - name: Publish summary
+        run: |
+          VERSION="${{ inputs.version || github.ref_name }}"
+          echo "Published libre/${VERSION} for ${{ matrix.profile }} to ${{ inputs.remote }}"
