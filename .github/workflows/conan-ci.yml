@@ -171,7 +171,15 @@ jobs:
             -o libre/*:with_openssl=False
             --build=missing
 
-          # Upload the MbedTLS varian
+          # Upload any new dependencies (like MbedTLS)
+          conan list "*:*" --format=compact | grep -v "libre/" | while read pkg; do
+            if [ ! -z "$pkg" ]; then
+              echo "Uploading dependency: $pkg"
+              conan upload "$pkg" -r artifactory -c || echo "Failed to upload $pkg, continuing..."
+            fi
+          done
+
+          # Upload the MbedTLS variant
           conan upload "libre/*" -r artifactory -c
 
       - name: Test minimal configuration
