@@ -2,6 +2,7 @@ from conan import ConanFile
 from conan.tools.cmake import CMakeToolchain, CMake, cmake_layout, CMakeDeps
 from conan.tools.files import copy, save
 from conan.tools.scm import Version
+from conan.errors import ConanInvalidConfiguration
 import os
 
 
@@ -27,6 +28,7 @@ class LibreConan(ConanFile):
         # SSL/TLS options
         "with_openssl": [True, False],
         "with_mbedtls": [True, False],
+        "with_libressl": [True, False],
         # Protocol support
         "with_sip": [True, False],
         "with_bfcp": [True, False],
@@ -46,6 +48,7 @@ class LibreConan(ConanFile):
         # Enable SSL by default
         "with_openssl": True,
         "with_mbedtls": False,
+        "with_libressl": False,
         # Enable all protocols by default
         "with_sip": True,
         "with_bfcp": True,
@@ -78,9 +81,17 @@ class LibreConan(ConanFile):
             # Unix sockets not available on Windows
             self.options.with_unixsock = False
 
-        # Can't enable both SSL libraries
-        if self.options.with_mbedtls:
-            self.options.with_openssl = False
+        # Can't enable multiple SSL libraries
+        ssl_count = sum([
+            bool(self.options.with_openssl),
+            bool(self.options.with_mbedtls),
+            bool(self.options.with_libressl)
+        ])
+        if ssl_count > 1:
+            raise ConanInvalidConfiguration(
+                "Only one SSL library can be enabled at a time. "
+                "Choose either with_openssl, with_mbedtls, or with_libressl."
+            )
 
     def configure(self):
         if self.options.shared:
@@ -99,6 +110,8 @@ class LibreConan(ConanFile):
             self.requires("openssl/[>=1.1.1]")
         elif self.options.with_mbedtls:
             self.requires("mbedtls/3.6.0")
+        elif self.options.with_libressl:
+            self.requires("libressl/3.9.1")
 
         # Compression
         if self.options.with_zlib:
@@ -117,6 +130,7 @@ class LibreConan(ConanFile):
         # Configure options
         tc.variables["USE_OPENSSL"] = self.options.with_openssl
         tc.variables["USE_MBEDTLS"] = self.options.with_mbedtls
+        tc.variables["USE_LIBRESSL"] = self.options.with_libressl
         tc.variables["USE_SIP"] = self.options.with_sip
         tc.variables["USE_BFCP"] = self.options.with_bfcp
         tc.variables["USE_PCP"] = self.options.with_pcp
@@ -182,6 +196,12 @@ class LibreConan(ConanFile):
 
         if self.options.with_mbedtls:
             self.cpp_info.defines.append("USE_MBEDTLS")
+
+        if self.options.with_libressl:
+            self.cpp_info.defines.extend([
+                "USE_LIBRESSL", "USE_TLS", "USE_DTLS",
+                "USE_OPENSSL_AES", "USE_OPENSSL_HMAC"
+            ])
 
         if self.options.with_zlib:
             self.cpp_info.defines.append("USE_ZLIB")

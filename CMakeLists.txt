@@ -527,7 +527,7 @@ if(USE_SIP)
 endif()
 
 
-if(USE_OPENSSL)
+if(USE_OPENSSL OR USE_LIBRESSL)
   list(APPEND SRCS
     src/main/openssl.c
     src/aes/openssl/aes.c
