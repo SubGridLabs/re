@@ -258,6 +258,10 @@ if(USE_OPENSSL)
   list(APPEND RE_LIBS OpenSSL::SSL OpenSSL::Crypto)
 endif()
 
+if(USE_MBEDTLS)
+  list(APPEND RE_LIBS MbedTLS::mbedtls)
+endif()
+
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   list(APPEND RE_LIBS
     "-framework SystemConfiguration" "-framework CoreFoundation"

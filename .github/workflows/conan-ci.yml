@@ -4,7 +4,7 @@ on:
   push:
     branches: ["main", "conan-packaging"]
   pull_request:
-    branches: ["main"]
+    branches: ["main", "conan-packaging"]
 
 env:
   CONAN_V2_MODE: 1
@@ -16,19 +16,19 @@ jobs:
       matrix:
         include:
           - profile: "linux-x64"
-            os: ubuntu-latest
+            os: ubuntu-lates
             arch: x86_64
             build_type: Release
           - profile: "macos-arm64"
-            os: macos-latest
+            os: macos-lates
             arch: armv8
             build_type: Release
           - profile: "macos-x64"
-            os: macos-latest
+            os: macos-lates
             arch: x86_64
             build_type: Release
           - profile: "windows-x64"
-            os: windows-latest
+            os: windows-lates
             arch: x86_64
             build_type: Release
 
@@ -54,7 +54,7 @@ jobs:
         run: |
           conan profile detect --force
           mkdir -p ~/.conan2/profiles
-          
+
           if [[ "${{ matrix.profile }}" == "macos-"* ]]; then
             cat > ~/.conan2/profiles/ci << 'EOF'
           [settings]
@@ -108,7 +108,6 @@ jobs:
         run: |
           conan remote add artifactory ${{ secrets.CONAN_REMOTE_URL }} --force
           conan remote add conancenter https://center.conan.io --force
-          
       - name: Authenticate with Artifactory
         run: |
           conan remote login artifactory ${{ secrets.CONAN_USER }} -p ${{ secrets.CONAN_PASSWORD }}
@@ -122,11 +121,12 @@ jobs:
             conan-libre-${{ matrix.profile }}-
             conan-libre-
 
-      - name: Build dependencies and upload missing packages
+      - name: Build dependencies and upload missing packages (Unix)
+        if: runner.os != 'Windows'
         run: |
           echo "Building dependencies and uploading missing packages..."
           conan install . --profile:build=ci --profile:host=ci --build=missing
-          
+
           # Upload any newly built dependencies to artifactory
           conan list "*:*" --format=compact | grep -v "libre/" | while read pkg; do
             if [ ! -z "$pkg" ]; then
@@ -135,11 +135,30 @@ jobs:
             fi
           done
 
+      - name: Build dependencies and upload missing packages (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          echo "Building dependencies and uploading missing packages..."
+          # Install dependencies, building missing ones
+          conan install . --profile:build=ci --profile:host=ci --build=missing
+          
+          # Upload any newly built dependencies to artifactory
+          $packages = conan list "*:*" --format=compact | Where-Object { $_ -notmatch "libre/" }
+          foreach ($pkg in $packages) {
+            if ($pkg) {
+              echo "Uploading dependency: $pkg"
+              conan upload "$pkg" -r artifactory -c
+              if ($LASTEXITCODE -ne 0) {
+                echo "Failed to upload $pkg, continuing..."
+              }
+            }
+          }
+
       - name: Test OpenSSL configuration (default)
         run: |
           echo "Testing with OpenSSL (default configuration)..."
           conan create . --profile:build=ci --profile:host=ci --build=missing
-          
+
           # Upload the libre package
           conan upload "libre/*" -r artifactory -c
 
@@ -147,25 +166,25 @@ jobs:
         if: matrix.profile != 'windows-x64'
         run: |
           echo "Testing with MbedTLS instead of OpenSSL..."
-          conan create . --profile:build=ci --profile:host=ci \
-            -o libre/*:with_mbedtls=True \
-            -o libre/*:with_openssl=False \
+          conan create . --profile:build=ci --profile:host=ci
+            -o libre/*:with_mbedtls=True
+            -o libre/*:with_openssl=False
             --build=missing
-          
-          # Upload the MbedTLS variant
+
+          # Upload the MbedTLS varian
           conan upload "libre/*" -r artifactory -c
 
       - name: Test minimal configuration
         run: |
           echo "Testing minimal configuration..."
-          conan create . --profile:build=ci --profile:host=ci \
-            -o libre/*:with_bfcp=False \
-            -o libre/*:with_pcp=False \
-            -o libre/*:with_rtmp=False \
-            -o libre/*:with_zlib=False \
+          conan create . --profile:build=ci --profile:host=ci
+            -o libre/*:with_bfcp=False
+            -o libre/*:with_pcp=False
+            -o libre/*:with_rtmp=False
+            -o libre/*:with_zlib=False
             --build=missing
-          
-          # Upload the minimal variant
+
+          # Upload the minimal varian
           conan upload "libre/*" -r artifactory -c
 
       - name: Package information
@@ -174,7 +193,7 @@ jobs:
           conan list libre/4.0.0:*
 
   quality:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-lates
     name: "Quality Checks"
 
     steps:
@@ -188,7 +207,7 @@ jobs:
 
       - name: Install tools
         run: |
-          pip install conan yamllint
+          pip install conan yamllin
 
       - name: Validate Conan recipe
         run: |
@@ -201,7 +220,7 @@ jobs:
   summary:
     needs: [build, quality]
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-lates
     name: "Build Summary"
 
     steps:

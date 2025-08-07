@@ -23,23 +23,23 @@ jobs:
       matrix:
         include:
           - profile: "linux-x64"
-            os: ubuntu-latest
+            os: ubuntu-lates
             arch: x86_64
           - profile: "macos-arm64"
-            os: macos-latest
+            os: macos-lates
             arch: armv8
           - profile: "macos-x64"
-            os: macos-latest
+            os: macos-lates
             arch: x86_64
           - profile: "windows-x64"
-            os: windows-latest
+            os: windows-lates
             arch: x86_64
 
     runs-on: ${{ matrix.os }}
     name: "Publish ${{ matrix.profile }}"
 
     steps:
-      - name: Checkout
+      - name: Checkou
         uses: actions/checkout@v4
 
       - name: Setup Python
@@ -111,7 +111,7 @@ jobs:
         run: |
           conan remote add artifactory ${{ secrets.CONAN_REMOTE_URL }} --force
           conan remote add conancenter https://center.conan.io --force
-          
+
       - name: Authenticate with Artifactory
         run: |
           conan remote login artifactory ${{ secrets.CONAN_USER }} -p ${{ secrets.CONAN_PASSWORD }}
@@ -119,11 +119,11 @@ jobs:
       - name: Create and upload packages
         run: |
           VERSION="${{ inputs.version || github.ref_name }}"
-          
+
           # Build dependencies first and upload missing ones
           echo "Building dependencies and uploading missing packages..."
           conan install . --profile:build=release --profile:host=release --build=missing
-          
+
           # Upload any newly built dependencies to artifactory
           conan list "*:*" --format=compact | grep -v "libre/" | while read pkg; do
             if [ ! -z "$pkg" ]; then
@@ -134,23 +134,23 @@ jobs:
 
           # Build main configuration (OpenSSL)
           echo "Building main configuration with OpenSSL..."
-          conan create . --name=libre --version=${VERSION} \
-            --profile:build=release --profile:host=release \
+          conan create . --name=libre --version=${VERSION}
+            --profile:build=release --profile:host=release
             --build=missing
-          
+
           # Upload the libre package
           conan upload "libre/${VERSION}@" -r artifactory -c
 
           # Build alternative configuration (MbedTLS) - if not Windows
           if [[ "${{ matrix.profile }}" != "windows-x64" ]]; then
             echo "Building alternative configuration with MbedTLS..."
-            conan create . --name=libre --version=${VERSION} \
-              --profile:build=release --profile:host=release \
-              -o libre/*:with_mbedtls=True \
-              -o libre/*:with_openssl=False \
+            conan create . --name=libre --version=${VERSION}
+              --profile:build=release --profile:host=release
+              -o libre/*:with_mbedtls=True
+              -o libre/*:with_openssl=False
               --build=missing
-            
-            # Upload MbedTLS variant
+
+            # Upload MbedTLS varian
             conan upload "libre/${VERSION}@" -r artifactory -c
           fi
 
