@@ -1,13 +1,13 @@
-name: Android
+name: Android (Disabled)
 
 # Disabled for now - needs shell syntax fixes
-# on:
-#   push:
-#     branches:
-#     - main
-#   pull_request:
-#     branches:
-#     - main
+on:
+  workflow_dispatch:
+    inputs:
+      force_run:
+        description: 'Force run disabled workflow'
+        required: false
+        type: boolean
 
 env:
   openssl: 3.2.1
