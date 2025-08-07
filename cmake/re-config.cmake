@@ -13,11 +13,14 @@ find_package(ZLIB)
 
 if (USE_MBEDTLS)
 find_package(MBEDTLS)
+elseif (USE_LIBRESSL)
+find_package(OpenSSL "1.1.1")
 else()
 find_package(OpenSSL "1.1.1")
 endif()
 
 option(USE_OPENSSL "Enable OpenSSL" ${OPENSSL_FOUND})
+option(USE_LIBRESSL "Enable LibreSSL" OFF)
 option(USE_UNIXSOCK "Enable Unix Domain Sockets" ON)
 option(USE_TRACE "Enable Tracing helpers" OFF)
 
@@ -196,6 +199,16 @@ if(USE_MBEDTLS)
   )
 endif()
 
+if(USE_LIBRESSL)
+  list(APPEND RE_DEFINITIONS
+    USE_LIBRESSL
+    USE_TLS
+    USE_DTLS
+    USE_OPENSSL_AES
+    USE_OPENSSL_HMAC
+  )
+endif()
+
 if(USE_UNIXSOCK)
   list(APPEND RE_DEFINITIONS
     HAVE_UNIXSOCK=1
@@ -260,6 +273,10 @@ endif()
 
 if(USE_MBEDTLS)
   list(APPEND RE_LIBS MbedTLS::mbedtls)
+endif()
+
+if(USE_LIBRESSL)
+  list(APPEND RE_LIBS OpenSSL::SSL OpenSSL::Crypto)
 endif()
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")

@@ -182,6 +182,26 @@ jobs:
           # Upload the MbedTLS variant
           conan upload "libre/*" -r artifactory -c
 
+      - name: Test LibreSSL configuration
+        if: matrix.profile != 'windows-x64'
+        run: |
+          echo "Testing with LibreSSL instead of OpenSSL..."
+          conan create . --profile:build=ci --profile:host=ci \
+            -o libre/*:with_libressl=True \
+            -o libre/*:with_openssl=False \
+            --build=missing
+
+          # Upload any new dependencies (like LibreSSL)
+          conan list "*:*" --format=compact | grep -v "libre/" | while read pkg; do
+            if [ ! -z "$pkg" ]; then
+              echo "Uploading dependency: $pkg"
+              conan upload "$pkg" -r artifactory -c || echo "Failed to upload $pkg, continuing..."
+            fi
+          done
+
+          # Upload the LibreSSL variant
+          conan upload "libre/*" -r artifactory -c
+
       - name: Test minimal configuration
         run: |
           echo "Testing minimal configuration..."
